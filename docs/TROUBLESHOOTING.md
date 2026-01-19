@@ -243,13 +243,13 @@ reviewers: "user1,user2"
 
 ```yaml
 # ❌ Evite: instável
-uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@main
+uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@main
 
 # ✅ Use tags em produção
-uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1.0.0
+uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1.0.0
 
 # ✅ Ou use SHA específico
-uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@abc1234
+uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@abc1234
 ```
 
 ### 2. Secrets Management
@@ -492,7 +492,7 @@ env:
 ## 💬 Precisa de Ajuda?
 
 1. Verifique esta documentação
-2. Procure em [Issues](https://github.com/your-org/reusable-actions/issues)
+2. Procure em [Issues](https://github.com/fiap-soat-grupo36/reusable-actions/issues)
 3. Abra nova issue com:
    - Workflow usado
    - Erro completo

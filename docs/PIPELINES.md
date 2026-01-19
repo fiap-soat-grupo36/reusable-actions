@@ -39,7 +39,7 @@ jobs:
   sonar:
     needs: build
     if: github.event_name == 'push'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       java_version: '21'
       sonar_org: 'my-org'
@@ -53,7 +53,7 @@ jobs:
   docker:
     needs: [build, sonar]
     if: github.event_name == 'push'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api-gateway", "user-service", "order-service", "notification-service"]'
       registry_namespace: 'mycompany'
@@ -69,7 +69,7 @@ jobs:
   deploy-staging:
     needs: docker
     if: github.ref == 'refs/heads/develop'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: staging
       environment: staging
@@ -88,7 +88,7 @@ jobs:
   deploy-production:
     needs: docker
     if: github.ref == 'refs/heads/main'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -134,7 +134,7 @@ on:
 jobs:
   # 1. Lint e Test
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       python_version: '3.11'
       project_dir: './lambda'
@@ -147,7 +147,7 @@ jobs:
   sonar:
     needs: build
     if: github.event_name == 'push'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       python_version: '3.11'
       sonar_org: 'my-org'
@@ -162,7 +162,7 @@ jobs:
   package:
     needs: [build, sonar]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './lambda'
       package_script: './scripts/package_lambda.sh'
@@ -179,7 +179,7 @@ jobs:
   # 4. Deploy via Terraform
   deploy:
     needs: package
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -251,7 +251,7 @@ jobs:
   # 2. Criar PR automaticamente
   create-pr:
     needs: ci
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: develop
       title: "✨ ${{ github.event.head_commit.message }}"
@@ -295,14 +295,14 @@ on:
 jobs:
   # 1. Build
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       run_tests: true
 
   # 2. Docker
   docker:
     needs: build
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api"]'
       registry_namespace: 'mycompany'
@@ -316,7 +316,7 @@ jobs:
   # 3. Deploy Dev
   deploy-dev:
     needs: docker
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: dev
       environment: dev
@@ -338,7 +338,7 @@ jobs:
   # 5. Deploy Staging
   deploy-staging:
     needs: approval-staging
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: staging
       environment: staging
@@ -360,7 +360,7 @@ jobs:
   # 7. Deploy Production
   deploy-production:
     needs: approval-production
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -431,7 +431,7 @@ jobs:
   docker:
     needs: [detect-changes, build]
     if: needs.detect-changes.outputs.changed-services != '[]'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: ${{ needs.detect-changes.outputs.changed-services }}
       dockerfile_pattern: './services/{module}/Dockerfile'
@@ -445,7 +445,7 @@ jobs:
   # 4. Deploy apenas serviços alterados
   deploy:
     needs: docker
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       terraform_vars: |
@@ -483,7 +483,7 @@ jobs:
   # 2. Build e Deploy Imediato
   docker:
     needs: ci
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api"]'
       registry_namespace: 'mycompany'
@@ -496,7 +496,7 @@ jobs:
 
   deploy:
     needs: docker
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -509,7 +509,7 @@ jobs:
   # 3. Criar PR para backport
   create-pr:
     needs: deploy
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       title: "🔥 HOTFIX: ${{ github.ref_name }}"

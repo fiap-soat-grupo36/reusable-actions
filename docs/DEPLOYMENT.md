@@ -54,7 +54,7 @@ on:
 
 jobs:
   upload:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './lambda'
       package_script: './scripts/package.sh'
@@ -74,7 +74,7 @@ jobs:
 ```yaml
 jobs:
   package:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './app'
       package_script: './build.sh'
@@ -89,7 +89,7 @@ jobs:
 ```yaml
 jobs:
   upload:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       s3_bucket: 'my-lambdas'
       s3_key: 'app-${{ github.sha }}.zip'
@@ -115,7 +115,7 @@ jobs:
 ```yaml
 jobs:
   package:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       s3_bucket: 'lambdas-prod'
       s3_key: 'processor-${{ github.sha }}.zip'
@@ -125,7 +125,7 @@ jobs:
 
   deploy:
     needs: package
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       terraform_vars: |
@@ -143,7 +143,7 @@ jobs:
 ```yaml
 jobs:
   package-processor:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './lambdas/processor'
       artifact_name: 'processor-lambda'
@@ -154,7 +154,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   package-validator:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './lambdas/validator'
       artifact_name: 'validator-lambda'
@@ -174,7 +174,7 @@ on:
 
 jobs:
   package:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       s3_bucket: 'prod-lambdas'
       s3_key: 'releases/app-${{ github.ref_name }}.zip'
@@ -296,14 +296,14 @@ on:
 
 jobs:
   test:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       project_dir: './lambda'
       run_tests: true
 
   sonar:
     needs: test
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       sonar_org: 'my-org'
       sonar_project_key: 'lambda'
@@ -312,7 +312,7 @@ jobs:
 
   package:
     needs: [test, sonar]
-    uses: your-org/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-upload-package.yml@v1
     with:
       project_root: './lambda'
       s3_bucket: 'prod-lambdas'
@@ -323,7 +323,7 @@ jobs:
 
   deploy:
     needs: package
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       terraform_vars: |

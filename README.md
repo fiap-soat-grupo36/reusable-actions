@@ -1,32 +1,29 @@
 # 📚 Reusable Workflows - Guia Completo
 
-> **Versão:** 2.0  
-> **Última atualização:** Janeiro 2026
-
 ## 📖 Documentação por Categoria
 
 ### 🏗️ Infrastructure & Deployment
-- **[Terraform](./TERRAFORM.md)** - Deploy de infraestrutura e aplicações
-- **[Docker Build](./DOCKER.md)** - Build e push de imagens Docker
+- **[Terraform](./docs/TERRAFORM.md)** - Deploy de infraestrutura e aplicações
+- **[Docker Build](./docs/DOCKER.md)** - Build e push de imagens Docker
 
 ### 🐍 Python Workflows
-- **[Python Build & Test](./PYTHON.md)** - Build, lint e testes Python
-- **[SonarCloud Python](./PYTHON.md#sonarcloud-analysis)** - Análise de qualidade Python
+- **[Python Build & Test](./docs/PYTHON.md)** - Build, lint e testes Python
+- **[SonarCloud Python](./docs/PYTHON.md#sonarcloud-analysis)** - Análise de qualidade Python
 
 ### ☕ Java Workflows
-- **[SonarCloud Java](./JAVA.md)** - Análise de qualidade Java com Maven
+- **[SonarCloud Java](./docs/JAVA.md)** - Análise de qualidade Java com Maven
 
 ### 📦 Package Management
-- **[Upload Lambda Package](./DEPLOYMENT.md)** - Build e upload de pacotes Lambda
+- **[Upload Lambda Package](./docs/DEPLOYMENT.md)** - Build e upload de pacotes Lambda
 
 ### 🤖 Automation
-- **[Create Pull Request](./AUTOMATION.md)** - Criação automática de PRs
+- **[Create Pull Request](./docs/AUTOMATION.md)** - Criação automática de PRs
 
 ### 🔄 Pipelines Completos
-- **[End-to-End Examples](./PIPELINES.md)** - Exemplos completos de CI/CD
+- **[End-to-End Examples](./docs/PIPELINES.md)** - Exemplos completos de CI/CD
 
 ### 🆘 Suporte
-- **[Troubleshooting & Best Practices](./TROUBLESHOOTING.md)** - Solução de problemas e boas práticas
+- **[Troubleshooting & Best Practices](./docs/TROUBLESHOOTING.md)** - Solução de problemas e boas práticas
 
 ---
 
@@ -68,13 +65,13 @@ secrets:
 
 | Workflow | Arquivo | Documentação | Uso Principal |
 |----------|---------|--------------|---------------|
-| Terraform | `_reusable-terraform.yml` | [📖](./TERRAFORM.md) | Deploy infra/apps |
-| Python Build | `_reusable-build-python.yml` | [📖](./PYTHON.md) | CI Python |
-| Sonar Python | `_reusable-sonar-python.yml` | [📖](./PYTHON.md#sonarcloud) | Quality gate Python |
-| Sonar Java | `_reusable-sonar-java.yml` | [📖](./JAVA.md) | Quality gate Java |
-| Docker Build | `_reusable-dockerhub.yml` | [📖](./DOCKER.md) | Build/push containers |
-| Upload Package | `_reusable-upload-package.yml` | [📖](./DEPLOYMENT.md) | Lambda packaging |
-| Create PR | `_reusable-create-pr.yml` | [📖](./AUTOMATION.md) | Auto PR |
+| Terraform | `_reusable-terraform.yml` | [📖](./docs/TERRAFORM.md) | Deploy infra/apps |
+| Python Build | `_reusable-build-python.yml` | [📖](./docs/PYTHON.md) | CI Python |
+| Sonar Python | `_reusable-sonar-python.yml` | [📖](./docs/PYTHON.md#sonarcloud) | Quality gate Python |
+| Sonar Java | `_reusable-sonar-java.yml` | [📖](./docs/JAVA.md) | Quality gate Java |
+| Docker Build | `_reusable-dockerhub.yml` | [📖](./docs/DOCKER.md) | Build/push containers |
+| Upload Package | `_reusable-upload-package.yml` | [📖](./docs/DEPLOYMENT.md) | Lambda packaging |
+| Create PR | `_reusable-create-pr.yml` | [📖](./docs/AUTOMATION.md) | Auto PR |
 
 ---
 
@@ -84,19 +81,19 @@ secrets:
 ```
 Build → Sonar Java → Docker Build → Terraform Deploy
 ```
-👉 [Ver exemplo completo](./PIPELINES.md#java-microservices)
+👉 [Ver exemplo completo](./docs/PIPELINES.md#java-microservices)
 
 ### Lambda Python
 ```
 Build Python → Sonar Python → Upload Package → Terraform Deploy
 ```
-👉 [Ver exemplo completo](./PIPELINES.md#python-lambda)
+👉 [Ver exemplo completo](./docs/PIPELINES.md#python-lambda)
 
 ### Feature Branch
 ```
 Build → Tests → Create PR
 ```
-👉 [Ver exemplo completo](./PIPELINES.md#feature-branch)
+👉 [Ver exemplo completo](./docs/PIPELINES.md#feature-branch)
 
 ---
 
@@ -107,29 +104,3 @@ Todos os workflows seguem as melhores práticas de segurança:
 - ✅ Uso de actions oficiais
 - ✅ Credentials via GitHub Secrets
 - ✅ Minimal permissions
-
----
-
-## 🆕 Novidades v2.0
-
-- ✅ **Terraform**: Variáveis e secrets dinâmicos
-- ✅ **Docker**: Estratégias de tagging flexíveis
-- ✅ **Sonar Java**: Plugin Maven oficial (sempre atualizado)
-- ✅ **Sonar Python**: Action oficial SonarCloud
-- ✅ **Upload Package**: Credenciais AWS seguras
-- ✅ **Build Python**: Outputs e controle de lint
-- ✅ **Create PR**: Reviewers, labels, draft mode
-
----
-
-## 📞 Suporte
-
-- 📖 [Documentação completa](./README.md)
-- 🐛 [Issues](https://github.com/your-org/reusable-actions/issues)
-- 💬 [Discussions](https://github.com/your-org/reusable-actions/discussions)
-
----
-
-## 📄 Licença
-
-MIT License - ver [LICENSE](../../LICENSE)

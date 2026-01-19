@@ -68,7 +68,7 @@ jobs:
 
   sonar:
     needs: test
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       java_version: '21'
       sonar_org: 'my-organization'
@@ -84,7 +84,7 @@ jobs:
 ```yaml
 jobs:
   sonar:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       java_version: '17'
       sonar_org: 'my-org'
@@ -104,7 +104,7 @@ jobs:
 ```yaml
 jobs:
   sonar:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       java_version: '21'
       sonar_org: 'my-org'
@@ -124,7 +124,7 @@ jobs:
 ```yaml
 jobs:
   sonar:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       sonar_org: 'my-org'
       sonar_project_key: 'simple-app'
@@ -222,7 +222,7 @@ jobs:
 
   sonar:
     needs: build
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-java.yml@v1
     with:
       java_version: '21'
       sonar_org: 'my-org'
@@ -233,7 +233,7 @@ jobs:
 
   docker:
     needs: [build, sonar]
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api", "worker"]'
       registry_namespace: 'mycompany'

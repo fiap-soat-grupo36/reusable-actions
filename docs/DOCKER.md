@@ -57,7 +57,7 @@ on:
 
 jobs:
   docker:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api", "worker", "scheduler"]'
       registry_namespace: 'mycompany'
@@ -86,7 +86,7 @@ on:
 
 jobs:
   docker:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["frontend", "backend"]'
       registry_namespace: 'mycompany'
@@ -115,7 +115,7 @@ jobs:
 
 jobs:
   docker:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api", "worker"]'
       dockerfile_pattern: './services/{module}/docker/Dockerfile'
@@ -137,7 +137,7 @@ on:
 
 jobs:
   docker-validation:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api", "worker"]'
       registry_namespace: 'mycompany'
@@ -159,7 +159,7 @@ on:
 
 jobs:
   docker:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api", "worker"]'
       registry_namespace: 'mycompany'
@@ -200,7 +200,7 @@ jobs:
 
   docker:
     needs: detect-changes
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: ${{ needs.detect-changes.outputs.modules }}
       registry_namespace: 'mycompany'
@@ -215,7 +215,7 @@ jobs:
 ```yaml
 jobs:
   docker:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api"]'
       registry_namespace: ${{ github.ref == 'refs/heads/main' && 'mycompany' || 'mycompany-dev' }}
@@ -311,7 +311,7 @@ jobs:
 
   docker:
     needs: test
-    uses: your-org/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-dockerhub.yml@v1
     with:
       modules: '["api-gateway", "user-service", "order-service"]'
       registry_namespace: 'mycompany'
@@ -324,7 +324,7 @@ jobs:
 
   deploy:
     needs: docker
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       terraform_vars: |

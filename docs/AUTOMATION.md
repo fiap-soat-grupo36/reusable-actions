@@ -41,7 +41,7 @@ on:
 
 jobs:
   create-pr:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: develop
       # head usa branch atual automaticamente
@@ -70,7 +70,7 @@ jobs:
 
   create-pr:
     needs: test
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       title: "🚀 Feature: New API Integration"
@@ -90,7 +90,7 @@ jobs:
 ```yaml
 jobs:
   create-draft-pr:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       title: "WIP: Refactoring Authentication"
@@ -114,7 +114,7 @@ on:
 
 jobs:
   create-pr:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       head: develop
@@ -151,7 +151,7 @@ on:
 
 jobs:
   create-pr:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       title: "🔥 HOTFIX: ${{ github.ref_name }}"
@@ -184,7 +184,7 @@ on:
 jobs:
   # Develop → Staging
   pr-to-staging:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: staging
       head: develop
@@ -194,7 +194,7 @@ jobs:
 
   # Staging → Production (draft)
   pr-to-prod:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: main
       head: staging
@@ -227,7 +227,7 @@ jobs:
 
   create-pr:
     needs: ci
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: develop
       title: "✨ ${{ github.event.head_commit.message }}"
@@ -310,14 +310,14 @@ on:
 
 jobs:
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       run_tests: true
       run_lint: true
 
   create-pr:
     needs: build
-    uses: your-org/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-create-pr.yml@v1
     with:
       base: develop
       labels: '["feature"]'

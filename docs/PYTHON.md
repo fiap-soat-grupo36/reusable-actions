@@ -44,7 +44,7 @@ on:
 
 jobs:
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       python_version: '3.11'
       project_dir: './app'
@@ -59,7 +59,7 @@ jobs:
 ```yaml
 jobs:
   test:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       python_version: '3.12'
       project_dir: './src'
@@ -72,7 +72,7 @@ jobs:
 ```yaml
 jobs:
   lint:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       project_dir: './'
       run_tests: false
@@ -85,7 +85,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       run_tests: true
 
@@ -150,7 +150,7 @@ on:
 
 jobs:
   sonar:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       python_version: '3.11'
       project_dir: './src'
@@ -169,13 +169,13 @@ jobs:
 ```yaml
 jobs:
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       run_tests: true
 
   sonar:
     needs: build
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       sonar_org: 'my-org'
       sonar_project_key: 'my-project'
@@ -190,7 +190,7 @@ jobs:
 ```yaml
 jobs:
   sonar:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       sonar_org: 'my-org'
       sonar_project_key: 'lambda-function'
@@ -217,7 +217,7 @@ on:
 
 jobs:
   build:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-build-python.yml@v1
     with:
       python_version: '3.11'
       run_tests: true
@@ -227,7 +227,7 @@ jobs:
   sonar:
     needs: build
     if: github.event_name == 'push'
-    uses: your-org/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-sonar-python.yml@v1
     with:
       sonar_org: 'my-org'
       sonar_project_key: 'my-app'

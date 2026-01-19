@@ -47,7 +47,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -86,7 +86,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: staging
       environment: dev
@@ -121,7 +121,7 @@ on:
 
 jobs:
   plan:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: infra-base
       environment: prod
@@ -144,7 +144,7 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: production
       environment: prod
@@ -188,7 +188,7 @@ jobs:
             auto_apply: false
             instance_type: t3.medium
     
-    uses: your-org/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
+    uses: fiap-soat-grupo36/reusable-actions/.github/workflows/_reusable-terraform.yml@v1
     with:
       workspace: ${{ matrix.workspace }}
       environment: ${{ matrix.environment }}
