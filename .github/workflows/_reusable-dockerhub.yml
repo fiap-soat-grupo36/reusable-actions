@@ -1,0 +1,166 @@
+name: _reusable-dockerhub
+on:
+  workflow_call:
+    inputs:
+      modules:
+        description: "JSON array of module names to build (e.g., ['api', 'worker'])"
+        required: true
+        type: string
+      dockerfile_pattern:
+        description: "Pattern for Dockerfile path. Use {module} as placeholder (e.g., './{module}/Dockerfile')"
+        required: false
+        type: string
+        default: './{module}/Dockerfile'
+      registry_namespace:
+        description: "Docker registry namespace/username"
+        required: true
+        type: string
+      tag_strategy:
+        description: "Tagging strategy: 'branch', 'sha', 'both', 'custom'"
+        required: false
+        type: string
+        default: 'both'
+      custom_tags:
+        description: "Custom tags as JSON array (e.g., ['latest', 'v1.0']). Used when tag_strategy='custom'"
+        required: false
+        type: string
+        default: '[]'
+      push_images:
+        required: false
+        type: boolean
+        default: false
+      max_parallel:
+        required: false
+        type: number
+        default: 4
+      exclude_modules:
+        description: "JSON array of modules to exclude (e.g., ['shared-library'])"
+        required: false
+        type: string
+        default: '["shared-library"]'
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max_parallel }}
+      matrix:
+        module: ${{ fromJSON(inputs.modules) }}
+        exclude:
+          - module: ${{ fromJSON(inputs.exclude_modules)[0] }}
+          - module: ${{ fromJSON(inputs.exclude_modules)[1] }}
+          - module: ${{ fromJSON(inputs.exclude_modules)[2] }}
+          - module: ${{ fromJSON(inputs.exclude_modules)[3] }}
+          - module: ${{ fromJSON(inputs.exclude_modules)[4] }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate Dockerfile path
+        id: dockerfile
+        run: |
+          DOCKERFILE_PATH="${{ inputs.dockerfile_pattern }}"
+          DOCKERFILE_PATH="${DOCKERFILE_PATH//\{module\}/${{ matrix.module }}}"
+          echo "path=${DOCKERFILE_PATH}" >> "$GITHUB_OUTPUT"
+          echo "📄 Dockerfile: ${DOCKERFILE_PATH}"
+
+      - name: Generate tags
+        id: tags
+        run: |
+          NAMESPACE="${{ inputs.registry_namespace }}"
+          MODULE="${{ matrix.module }}"
+          STRATEGY="${{ inputs.tag_strategy }}"
+          BRANCH="${{ github.ref_name }}"
+          SHA_SHORT="${GITHUB_SHA:0:7}"
+          
+          TAGS=""
+          
+          case "$STRATEGY" in
+            branch)
+              TAGS="${NAMESPACE}/${MODULE}:${BRANCH}"
+              ;;
+            sha)
+              TAGS="${NAMESPACE}/${MODULE}:${SHA_SHORT}"
+              ;;
+            both)
+              TAGS="${NAMESPACE}/${MODULE}:${BRANCH}"
+              TAGS="${TAGS}
+          ${NAMESPACE}/${MODULE}:${BRANCH}-${SHA_SHORT}"
+              ;;
+            custom)
+              CUSTOM_TAGS='${{ inputs.custom_tags }}'
+              if [ "$CUSTOM_TAGS" = "[]" ] || [ -z "$CUSTOM_TAGS" ]; then
+                echo "❌ tag_strategy=custom but no custom_tags provided"
+                exit 1
+              fi
+              TAGS=$(echo "$CUSTOM_TAGS" | jq -r '.[]' | while read tag; do
+                echo "${NAMESPACE}/${MODULE}:${tag}"
+              done | paste -sd $'\n' -)
+              ;;
+            *)
+              echo "❌ Invalid tag_strategy: $STRATEGY"
+              exit 1
+              ;;
+          esac
+          
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAGS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🐳 Docker Build Configuration"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Module: ${MODULE}"
+          echo "Strategy: ${STRATEGY}"
+          echo "Push: ${{ inputs.push_images }}"
+          echo "Tags:"
+          echo "$TAGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.push_images }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ steps.dockerfile.outputs.path }}
+          push: ${{ inputs.push_images }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.module }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.module }}
+
+      - name: Build Summary
+        if: always()
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🐳 Docker Build: ${{ matrix.module }}
+
+          **Status:** ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
+          **Pushed:** ${{ inputs.push_images && '✅ Yes' || '❌ No (build only)' }}
+
+          ### Tags
+          \`\`\`
+          ${{ steps.tags.outputs.tags }}
+          \`\`\`
+
+          ### Configuration
+          - **Branch:** ${{ github.ref_name }}
+          - **Commit:** ${GITHUB_SHA:0:7}
+          - **Dockerfile:** ${{ steps.dockerfile.outputs.path }}
+          EOF

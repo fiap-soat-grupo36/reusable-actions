@@ -1,0 +1,190 @@
+name: _reusable-ci-terraform
+
+on:
+  workflow_call:
+    inputs:
+      workspace:
+        description: 'Terraform workspace name'
+        required: true
+        type: string
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        type: string
+      working_directory:
+        required: false
+        type: string
+        default: './infra/'
+      aws_region:
+        required: false
+        type: string
+        default: 'us-east-1'
+      tfvars_file:
+        required: false
+        type: string
+        default: ''
+      auto_apply:
+        required: false
+        type: boolean
+        default: false
+      terraform_vars:
+        description: 'JSON object with custom Terraform variables (e.g. {"image_tag": "v1.0", "instance_type": "t3.micro"})'
+        required: false
+        type: string
+        default: '{}'
+      terraform_secrets:
+        description: 'JSON object with secret names to pass as TF_VAR (e.g. {"datadog_api_key": "DATADOG_API_KEY", "db_password": "DB_PASSWORD"})'
+        required: false
+        type: string
+        default: '{}'
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  ci-terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+        
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5.0.0
+        with:
+          aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
+          aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Set up Terraform CLI
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        id: init
+        env:
+          TF_VAR_aws_region: ${{ inputs.aws_region }}
+        run: |
+          terraform init -no-color
+
+      - name: Select Terraform Workspace
+        run: |
+          echo "🔍 Listing existing workspaces..."
+          terraform workspace list
+          
+          echo "📋 Selecting workspace: ${{ inputs.workspace }}"
+          terraform workspace select ${{ inputs.workspace }} || terraform workspace new ${{ inputs.workspace }}
+          
+          echo "✅ Current workspace:"
+          terraform workspace show
+
+      - name: Set up Terraform Variables
+        id: setup_vars
+        run: |
+          echo "Setting up Terraform variables..."
+          
+          # Parse and export regular input variables
+          if [ -n '${{ inputs.terraform_vars }}' ] && [ '${{ inputs.terraform_vars }}' != '{}' ]; then
+            echo '${{ inputs.terraform_vars }}' | jq -r 'to_entries[] | "TF_VAR_\(.key)=\(.value)"' >> $GITHUB_ENV
+          fi
+          
+          # Parse secret mappings and prepare for next steps
+          if [ -n '${{ inputs.terraform_secrets }}' ] && [ '${{ inputs.terraform_secrets }}' != '{}' ]; then
+            echo "SECRET_MAPPINGS<<EOF" >> $GITHUB_ENV
+            echo '${{ inputs.terraform_secrets }}' >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+
+      - name: Terraform Validate
+        id: validate
+        env:
+          TF_VAR_aws_region: ${{ inputs.aws_region }}
+        run: |
+          terraform validate -no-color || true
+
+      - name: Terraform plan
+        id: plan
+        env:
+          TF_VAR_aws_region: ${{ inputs.aws_region }}
+          TFVARS_FILE: ${{ inputs.tfvars_file }}
+        run: |
+          set -euo pipefail
+          
+          # Export secrets as TF_VAR based on mappings
+          if [ -n "${SECRET_MAPPINGS:-}" ]; then
+            echo "Processing secret mappings..."
+            echo "$SECRET_MAPPINGS" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r tf_var secret_name; do
+              secret_value=$(echo '${{ toJSON(secrets) }}' | jq -r --arg key "$secret_name" '.[$key] // ""')
+              if [ -n "$secret_value" ]; then
+                export "TF_VAR_${tf_var}=${secret_value}"
+                echo "✓ Mapped secret ${secret_name} to TF_VAR_${tf_var}"
+              fi
+            done
+          fi
+          
+          PLAN_CMD=(terraform plan -no-color -input=false)
+          if [ -n "${TFVARS_FILE:-}" ]; then
+            echo "Using tfvars file: ${TFVARS_FILE}"
+            PLAN_CMD+=( -var-file="${TFVARS_FILE}" )
+          else
+            echo "No tfvars file provided; running plan without -var-file"
+          fi
+          "${PLAN_CMD[@]}"
+        continue-on-error: false
+
+      - uses: actions/github-script@v6
+        name: Comment PR with plan details
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+        
+      - name: Terraform Apply
+        if: ${{ inputs.auto_apply && github.event_name == 'push' }}
+        env:
+          TF_VAR_aws_region: ${{ inputs.aws_region }}
+          TFVARS_FILE: ${{ inputs.tfvars_file }}
+        run: |
+          set -euo pipefail
+          
+          # Export secrets as TF_VAR based on mappings
+          if [ -n "${SECRET_MAPPINGS:-}" ]; then
+            echo "Processing secret mappings..."
+            echo "$SECRET_MAPPINGS" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r tf_var secret_name; do
+              secret_value=$(echo '${{ toJSON(secrets) }}' | jq -r --arg key "$secret_name" '.[$key] // ""')
+              if [ -n "$secret_value" ]; then
+                export "TF_VAR_${tf_var}=${secret_value}"
+                echo "✓ Mapped secret ${secret_name} to TF_VAR_${tf_var}"
+              fi
+            done
+          fi
+          
+          if [ -n "${{ inputs.tfvars_file }}" ]; then
+            terraform apply -no-color -input=false -auto-approve -var-file="${{ inputs.tfvars_file }}"
+          else
+            terraform apply -no-color -input=false -auto-approve
+          fi

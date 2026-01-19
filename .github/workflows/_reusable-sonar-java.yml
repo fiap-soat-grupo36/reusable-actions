@@ -1,0 +1,116 @@
+name: _reusable-sonar
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: '21'
+      sonar_host:
+        required: false
+        type: string
+        default: 'https://sonarcloud.io'
+      sonar_org:
+        required: true
+        type: string
+      sonar_project_key:
+        required: true
+        type: string
+      project_dir:
+        required: false
+        type: string
+        default: '.'
+      maven_args:
+        required: false
+        type: string
+        default: ''
+      coverage_paths:
+        description: 'Comma-separated paths to coverage reports (e.g., "**/target/site/jacoco/jacoco.xml")'
+        required: false
+        type: string
+        default: '**/target/site/jacoco/jacoco.xml'
+      sonar_extra_properties:
+        description: 'Additional Sonar properties as multi-line string (e.g., "-Dsonar.exclusions=**/*test*.java")'
+        required: false
+        type: string
+        default: ''
+      maven_skip_tests:
+        required: false
+        type: boolean
+        default: true
+      download_jacoco_artifacts:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      SONAR_TOKEN:
+        required: true
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.project_dir }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Download JaCoCo reports
+        if: ${{ inputs.download_jacoco_artifacts }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-reports-*
+          merge-multiple: true
+
+      - name: Resolve JaCoCo XML paths
+        id: jacoco
+        run: |
+          mapfile -t files < <(find . -path "${{ inputs.coverage_paths }}" -print)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "⚠️  No JaCoCo reports found at pattern: ${{ inputs.coverage_paths }}"
+            echo "paths=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "✅ Found ${#files[@]} JaCoCo report(s)"
+          joined=$(printf "%s," "${files[@]}")
+          joined=${joined%,}
+          echo "paths=$joined" >> "$GITHUB_OUTPUT"
+
+      - name: Build and Run SonarCloud Scan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          JACOCO_XML_PATHS: ${{ steps.jacoco.outputs.paths }}
+        run: |
+          echo "🔍 Starting SonarCloud analysis..."
+          
+          SONAR_ARGS=""
+          if [ -n "$JACOCO_XML_PATHS" ]; then
+            SONAR_ARGS="-Dsonar.coverage.jacoco.xmlReportPaths=$JACOCO_XML_PATHS"
+            echo "✅ Coverage reports: $JACOCO_XML_PATHS"
+          fi
+          
+          SKIP_TESTS=""
+          if [ "${{ inputs.maven_skip_tests }}" = "true" ]; then
+            SKIP_TESTS="-DskipTests"
+            echo "⏭️  Skipping tests (maven_skip_tests=true)"
+          fi
+          
+          mvn --batch-mode $SKIP_TESTS verify sonar:sonar \
+            -Dsonar.host.url="${{ inputs.sonar_host }}" \
+            -Dsonar.organization="${{ inputs.sonar_org }}" \
+            -Dsonar.projectKey="${{ inputs.sonar_project_key }}" \
+            $SONAR_ARGS \
+            ${{ inputs.sonar_extra_properties }} \
+            ${{ inputs.maven_args }}
+          
+          echo "✅ SonarCloud analysis complete"

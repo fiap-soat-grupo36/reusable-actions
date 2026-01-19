@@ -1,0 +1,111 @@
+name: Create Pull Request
+
+on:
+  workflow_call:
+    inputs:
+      base:
+        required: true
+        type: string
+      head:
+        required: false
+        type: string
+      title:
+        required: false
+        type: string
+        default: ''
+      body:
+        required: false
+        type: string
+        default: ''
+      draft:
+        required: false
+        type: boolean
+        default: false
+      reviewers:
+        description: 'JSON array of reviewer usernames (e.g. ["user1", "user2"])'
+        required: false
+        type: string
+        default: '[]'
+      labels:
+        description: 'JSON array of label names (e.g. ["bug", "enhancement"])'
+        required: false
+        type: string
+        default: '[]'
+
+jobs:
+  create_pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create Pull Request
+        uses: actions/github-script@v6
+        env:
+          BASE: ${{ inputs.base }}
+          HEAD: ${{ inputs.head }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+          DRAFT: ${{ inputs.draft }}
+          REVIEWERS: ${{ inputs.reviewers }}
+          LABELS: ${{ inputs.labels }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = process.env.HEAD || context.ref.replace('refs/heads/', '');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Check if an open PR from this branch to the base already exists
+            const { data: prs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+              base: process.env.BASE
+            });
+
+            if (prs.length > 0) {
+              console.log(`✅ PR already exists: ${prs[0].html_url}`);
+              return;
+            }
+
+            const title = process.env.TITLE || `Merge ${branch} into ${process.env.BASE}`;
+            const body = process.env.BODY || `Automated PR created after successful CI on branch ${branch}.`;
+            const draft = process.env.DRAFT === 'true';
+
+            const pr = await github.rest.pulls.create({
+              owner,
+              repo,
+              head: branch,
+              base: process.env.BASE,
+              title,
+              body,
+              draft
+            });
+
+            console.log(`✅ Created PR ${pr.data.html_url}`);
+
+            // Add reviewers if provided
+            const reviewers = JSON.parse(process.env.REVIEWERS || '[]');
+            if (reviewers.length > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: pr.data.number,
+                reviewers
+              });
+              console.log(`✅ Added reviewers: ${reviewers.join(', ')}`);
+            }
+
+            // Add labels if provided
+            const labels = JSON.parse(process.env.LABELS || '[]');
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.data.number,
+                labels
+              });
+              console.log(`✅ Added labels: ${labels.join(', ')}`);
+            }

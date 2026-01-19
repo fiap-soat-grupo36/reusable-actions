@@ -1,0 +1,91 @@
+name: _reusable-sonar
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        required: false
+        type: string
+        default: '3.11'
+      sonar_host:
+        required: false
+        type: string
+        default: 'https://sonarcloud.io'
+      sonar_org:
+        required: true
+        type: string
+      sonar_project_key:
+        required: true
+        type: string
+      project_dir:
+        required: false
+        type: string
+        default: '.'
+      requirements_file:
+        required: false
+        type: string
+        default: 'requirements.txt'
+      coverage_paths:
+        required: false
+        type: string
+        default: 'coverage.xml'
+      sonar_extra_properties:
+        description: 'Additional Sonar properties as multi-line string (e.g. "sonar.exclusions=**/*test*.py")'
+        required: false
+        type: string
+        default: ''
+      run_tests:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      SONAR_TOKEN:
+        required: true
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.project_dir }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f "${{ inputs.requirements_file }}" ]; then
+            pip install -r "${{ inputs.requirements_file }}"
+          fi
+
+      - name: Install test dependencies
+        if: ${{ inputs.run_tests }}
+        run: |
+          pip install pytest pytest-cov
+
+      - name: Run tests and generate coverage report
+        if: ${{ inputs.run_tests }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest --cov=. --cov-report=xml:${{ inputs.coverage_paths }}
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: ${{ inputs.project_dir }}
+          args: >
+            -Dsonar.organization=${{ inputs.sonar_org }}
+            -Dsonar.projectKey=${{ inputs.sonar_project_key }}
+            -Dsonar.python.coverage.reportPaths=${{ inputs.coverage_paths }}
+            -Dsonar.sources=.
+            ${{ inputs.sonar_extra_properties }}

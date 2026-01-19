@@ -1,0 +1,117 @@
+name: _reusable-upload-package
+
+on:
+  workflow_call:
+    inputs:
+      project_root:
+        required: false
+        type: string
+        default: './'
+      package_script:
+        required: false
+        type: string
+        default: './scripts/package_lambda.sh'
+      artifact_path:
+        required: false
+        type: string
+        default: 'app/lambda.zip'
+      artifact_name:
+        required: false
+        type: string
+        default: 'lambda-package'
+      s3_bucket:
+        required: false
+        type: string
+        default: ''
+      s3_key:
+        required: false
+        type: string
+        default: ''
+      aws_region:
+        required: false
+        type: string
+        default: 'us-east-1'
+      python_version:
+        required: false
+        type: string
+        default: '3.12'
+      validate_artifact:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+    outputs:
+      s3_bucket:
+        description: "S3 bucket used for the upload"
+        value: "${{ jobs.upload-package.outputs.s3_bucket }}"
+      s3_key:
+        description: "S3 key created for the uploaded artifact"
+        value: "${{ jobs.upload-package.outputs.s3_key }}"
+
+jobs:
+  upload-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.project_root }}
+    outputs:
+      s3_key: ${{ steps.s3upload.outputs.s3_key }}
+      s3_bucket: ${{ steps.s3upload.outputs.s3_bucket }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Make package script executable
+        run: |
+          chmod +x "${{ inputs.package_script }}"
+
+      - name: Build lambda zip
+        run: |
+          "${{ inputs.package_script }}"
+
+      - name: Validate artifact exists
+        if: ${{ inputs.validate_artifact }}
+        run: |
+          if [ ! -f "${{ inputs.artifact_path }}" ]; then
+            echo "❌ Error: Artifact not found at ${{ inputs.artifact_path }}"
+            exit 1
+          fi
+          echo "✅ Artifact found: ${{ inputs.artifact_path }}"
+          ls -lh "${{ inputs.artifact_path }}"
+
+      - name: Upload Lambda Package as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.artifact_path }}
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.s3_bucket != '' }}
+        uses: aws-actions/configure-aws-credentials@v5.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Upload to S3
+        id: s3upload
+        if: ${{ inputs.s3_bucket != '' }}
+        run: |
+          KEY="${{ inputs.s3_key }}"
+          if [ -z "$KEY" ]; then
+            KEY=$(basename "${{ inputs.artifact_path }}")
+          fi
+          echo "📦 Uploading ${{ inputs.artifact_path }} to s3://${{ inputs.s3_bucket }}/$KEY"
+          aws s3 cp "${{ inputs.artifact_path }}" "s3://${{ inputs.s3_bucket }}/$KEY" --only-show-errors
+          echo "✅ Upload complete"
+          echo "s3_key=$KEY" >> $GITHUB_OUTPUT
+          echo "s3_bucket=${{ inputs.s3_bucket }}" >> $GITHUB_OUTPUT
