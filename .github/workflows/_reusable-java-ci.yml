@@ -68,12 +68,29 @@ jobs:
           java-version: ${{ inputs.java_version }}
           distribution: temurin
           cache: maven
-          server-id: github
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_TOKEN
         env:
           MAVEN_USERNAME: ${{ secrets.GH_PACKAGES_USERNAME != '' && secrets.GH_PACKAGES_USERNAME || github.actor }}
           MAVEN_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN != '' && secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Configure Maven settings
+        env:
+          MAVEN_USERNAME: ${{ secrets.GH_PACKAGES_USERNAME != '' && secrets.GH_PACKAGES_USERNAME || github.actor }}
+          MAVEN_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN != '' && secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>github</id>
+                <username>${MAVEN_USERNAME}</username>
+                <password>${MAVEN_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
       - name: Lint (Checkstyle)
         if: ${{ inputs.run_checkstyle && !inputs.skip_checkstyle }}
