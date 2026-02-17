@@ -43,7 +43,9 @@ on:
         required: false
         type: string
         default: '**/target/site/jacoco/jacoco.xml'
-    secrets: {}
+    secrets:
+      GH_PACKAGES_TOKEN:
+        required: false
 
 jobs:
   build-and-test:
@@ -65,10 +67,11 @@ jobs:
           distribution: temurin
           cache: maven
           server-id: github
-          server-username: GITHUB_ACTOR
-          server-password: GITHUB_TOKEN
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_TOKEN
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_USERNAME: ${{ github.actor }}
+          MAVEN_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN != '' && secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Lint (Checkstyle)
         if: ${{ inputs.run_checkstyle && !inputs.skip_checkstyle }}
