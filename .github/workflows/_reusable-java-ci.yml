@@ -1,0 +1,82 @@
+name: _reusable-java-ci
+
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: '21'
+      project_dir:
+        required: false
+        type: string
+        default: '.'
+      run_checkstyle:
+        required: false
+        type: boolean
+        default: true
+      skip_checkstyle:
+        required: false
+        type: boolean
+        default: false
+      checkstyle_command:
+        required: false
+        type: string
+        default: 'mvn -B -ntp checkstyle:check'
+      build_command:
+        required: false
+        type: string
+        default: 'mvn -B -ntp clean verify'
+      package_command:
+        required: false
+        type: string
+        default: ''
+      upload_jacoco_reports:
+        required: false
+        type: boolean
+        default: true
+      jacoco_artifact_name:
+        required: false
+        type: string
+        default: 'jacoco-reports'
+      jacoco_report_path:
+        required: false
+        type: string
+        default: '**/target/site/jacoco/jacoco.xml'
+    secrets: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.project_dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Lint (Checkstyle)
+        if: ${{ inputs.run_checkstyle && !inputs.skip_checkstyle }}
+        run: ${{ inputs.checkstyle_command }}
+
+      - name: Build and Test
+        run: ${{ inputs.build_command }}
+
+      - name: Build Package
+        if: ${{ inputs.package_command != '' }}
+        run: ${{ inputs.package_command }}
+
+      - name: Upload JaCoCo Reports
+        if: ${{ inputs.upload_jacoco_reports }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.jacoco_artifact_name }}
+          path: ${{ inputs.jacoco_report_path }}
+          if-no-files-found: warn
