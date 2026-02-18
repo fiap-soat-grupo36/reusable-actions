@@ -81,6 +81,14 @@ jobs:
           awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || true
           echo "✅ S3 backend bucket ready"
 
+      - name: Clean corrupted state if exists
+        continue-on-error: true
+        run: |
+          echo "🧹 Checking for corrupted state..."
+          awslocal s3 ls s3://terraform-state-fiap 2>/dev/null && \
+          awslocal s3 rm s3://terraform-state-fiap --recursive --force || \
+          echo "⚠️ No state files to clean"
+
       - name: Configure LocalStack environment
         run: |
           echo "AWS_ACCESS_KEY_ID=test" >> $GITHUB_ENV
