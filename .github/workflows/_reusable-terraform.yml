@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: '{}'
+      localstack_pod:
+        description: 'LocalStack Cloud Pod name (e.g. fiao-microservices/prod). If empty, skip Cloud Pod load.'
+        required: false
+        type: string
+        default: 'fiap-microservices'
     secrets:
       LOCALSTACK_API_KEY:
         required: true
@@ -52,14 +57,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup LocalStack
-        uses: localstack/setup-localstack@v0.2.2
+      - name: Start LocalStack with Cloud Pod
+        uses: LocalStack/setup-localstack@v0.2.5
         with:
           image-tag: 'latest'
           install-awslocal: 'true'
           configuration: PERSISTENCE=1
+          use-pro: 'true'
+          state-backend: cloud-pods
+          state-action: ${{ inputs.localstack_pod != '' && 'load' || 'start' }}
+          state-name: ${{ inputs.localstack_pod }}
         env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_API_KEY }}
 
       - name: Configure LocalStack environment
         run: |
@@ -67,19 +76,6 @@ jobs:
           echo "AWS_SECRET_ACCESS_KEY=test" >> $GITHUB_ENV
           echo "AWS_DEFAULT_REGION=${{ inputs.aws_region }}" >> $GITHUB_ENV
           echo "AWS_ENDPOINT_URL=http://localhost:4566" >> $GITHUB_ENV
-
-      - name: Override backend for LocalStack
-        working-directory: ${{ inputs.working_directory }}
-        run: |
-          echo "Creating backend override for LocalStack..."
-          cat > backend_override.tf <<EOF
-          terraform {
-            backend "local" {
-              path = "terraform.tfstate"
-            }
-          }
-          EOF
-          echo "✅ Backend override created"
 
       - name: Set up Terraform CLI
         uses: hashicorp/setup-terraform@v3.1.2
@@ -208,6 +204,16 @@ jobs:
           else
             terraform apply -no-color -input=false -auto-approve
           fi
+
+      - name: Save LocalStack Cloud Pod
+        if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
+        uses: LocalStack/setup-localstack@v0.2.5
+        with:
+          state-backend: cloud-pods
+          state-action: save
+          state-name: ${{ inputs.localstack_pod }}
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_API_KEY }}
       
       - name: Cleanup LocalStack overrides
         if: ${{ always() }}
