@@ -43,7 +43,7 @@ on:
         type: string
         default: 'fiap-microservices'
     secrets:
-      LOCALSTACK_API_KEY:
+      LOCALSTACK_AUTH_TOKEN:
         required: true
 
 jobs:
@@ -62,13 +62,13 @@ jobs:
         with:
           image-tag: 'latest'
           install-awslocal: 'true'
-          configuration: PERSISTENCE=1
+          configuration: LOCALSTACK_PERSISTENCE=1
           use-pro: 'true'
           state-backend: cloud-pods
           state-action: ${{ inputs.localstack_pod != '' && 'load' || 'start' }}
           state-name: ${{ inputs.localstack_pod }}
         env:
-          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_API_KEY }}
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Configure LocalStack environment
         run: |
@@ -213,8 +213,8 @@ jobs:
           state-action: save
           state-name: ${{ inputs.localstack_pod }}
         env:
-          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_API_KEY }}
-      
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
       - name: Cleanup LocalStack overrides
         if: ${{ always() }}
         working-directory: ${{ inputs.working_directory }}
