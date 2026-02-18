@@ -219,11 +219,3 @@ jobs:
           echo "✅ Cloud Pod saved successfully"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-
-      - name: Cleanup LocalStack overrides
-        if: ${{ always() }}
-        working-directory: ${{ inputs.working_directory }}
-        run: |
-          echo "Cleaning up backend override..."
-          rm -f backend_override.tf
-          echo "✅ Cleanup complete"
