@@ -37,11 +37,18 @@ on:
         required: false
         type: string
         default: '{}'
+      use_localstack:
+        description: 'Use LocalStack for local AWS simulation'
+        required: false
+        type: boolean
+        default: false
     secrets:
       AWS_ACCESS_KEY_ID:
-        required: true
+        required: false
       AWS_SECRET_ACCESS_KEY:
-        required: true
+        required: false
+      LOCALSTACK_API_KEY:
+        required: false
 
 jobs:
   ci-terraform:
@@ -54,12 +61,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Setup LocalStack
+        if: ${{ inputs.use_localstack }}
+        uses: localstack/setup-localstack@v0.2.2
+        with:
+          image-tag: 'latest'
+          install-awslocal: 'true'
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
+
       - name: Configure AWS credentials
+        if: ${{ !inputs.use_localstack }}
         uses: aws-actions/configure-aws-credentials@v5.0.0
         with:
           aws-access-key-id: '${{ secrets.AWS_ACCESS_KEY_ID }}'
           aws-secret-access-key: '${{ secrets.AWS_SECRET_ACCESS_KEY }}'
           aws-region: ${{ inputs.aws_region }}
+
+      - name: Configure LocalStack environment
+        if: ${{ inputs.use_localstack }}
+        run: |
+          echo "AWS_ACCESS_KEY_ID=test" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=test" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ inputs.aws_region }}" >> $GITHUB_ENV
+          echo "AWS_ENDPOINT_URL=http://localhost:4566" >> $GITHUB_ENV
 
       - name: Set up Terraform CLI
         uses: hashicorp/setup-terraform@v3.1.2
