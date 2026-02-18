@@ -57,16 +57,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Start LocalStack with Cloud Pod
+      - name: Start LocalStack
         uses: LocalStack/setup-localstack@v0.2.5
         with:
           image-tag: 'latest'
           install-awslocal: 'true'
           configuration: LOCALSTACK_PERSISTENCE=1
           use-pro: 'true'
-          state-backend: cloud-pods
-          state-action: ${{ inputs.localstack_pod != '' && 'load' || 'start' }}
-          state-name: ${{ inputs.localstack_pod }}
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Load Cloud Pod
+        if: ${{ inputs.localstack_pod != '' }}
+        continue-on-error: true
+        run: |
+          echo "🔄 Attempting to load Cloud Pod: ${{ inputs.localstack_pod }}"
+          localstack pod load ${{ inputs.localstack_pod }} || echo "⚠️ Cloud Pod not found, starting fresh"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
@@ -207,11 +213,10 @@ jobs:
 
       - name: Save LocalStack Cloud Pod
         if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
-        uses: LocalStack/setup-localstack@v0.2.5
-        with:
-          state-backend: cloud-pods
-          state-action: save
-          state-name: ${{ inputs.localstack_pod }}
+        run: |
+          echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
+          localstack pod save ${{ inputs.localstack_pod }}
+          echo "✅ Cloud Pod saved successfully"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
