@@ -76,6 +76,11 @@ jobs:
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
+      - name: Ensure S3 backend bucket exists
+        run: |
+          awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || true
+          echo "✅ S3 backend bucket ready"
+
       - name: Configure LocalStack environment
         run: |
           echo "AWS_ACCESS_KEY_ID=test" >> $GITHUB_ENV
