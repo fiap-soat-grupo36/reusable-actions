@@ -59,11 +59,12 @@ jobs:
 
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@v0.2.5
+        continue-on-error: true
         with:
-          image-tag: 'latest'
-          install-awslocal: 'true'
-          configuration: LOCALSTACK_PERSISTENCE=1
-          use-pro: 'true'
+          state-backend: cloud-pods
+          state-name: ${{ inputs.localstack_pod }}
+          state-action: load
+          skip-startup: 'true'
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
@@ -226,9 +227,11 @@ jobs:
 
       - name: Save LocalStack Cloud Pod
         if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
-        run: |
-          echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
-          localstack pod save ${{ inputs.localstack_pod }}
-          echo "✅ Cloud Pod saved successfully"
+        uses: LocalStack/setup-localstack@v0.2.2
+        with:
+          state-backend: cloud-pods
+          state-name: ${{ inputs.localstack_pod }}
+          state-action: save
+          install-awslocal: 'true'
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
