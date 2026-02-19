@@ -225,11 +225,9 @@ jobs:
 
       - name: Save LocalStack Cloud Pod
         if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
-        uses: LocalStack/setup-localstack@v0.2.2
-        with:
-          state-backend: cloud-pods
-          state-name: ${{ inputs.localstack_pod }}
-          state-action: save
-          install-awslocal: 'true'
+        continue-on-error: true
+        run: |
+          echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
+          localstack pod save ${{ inputs.localstack_pod }} || echo "⚠️ Failed to save Cloud Pod"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
