@@ -60,18 +60,12 @@ jobs:
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@v0.2.5
         with:
+          image-tag: 'latest'
           install-awslocal: 'true'
+          configuration: LOCALSTACK_PERSISTENCE=1
+          use-pro: 'true'
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-
-      - name: Wait for LocalStack to be ready
-        run: |
-          echo "⏳ Waiting for LocalStack to be ready..."
-          timeout 60 bash -c 'until curl -s http://localhost:4566/_localstack/health | grep -q "running"; do 
-            echo "Waiting for LocalStack..."
-            sleep 2
-          done'
-          echo "✅ LocalStack is ready!"
 
       - name: Load Cloud Pod
         if: ${{ inputs.localstack_pod != '' }}
@@ -84,9 +78,16 @@ jobs:
 
       - name: Ensure S3 backend bucket exists
         run: |
-          echo "🪣 Ensuring S3 backend bucket exists..."
-          awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || echo "Bucket already exists"
+          awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || true
           echo "✅ S3 backend bucket ready"
+
+      - name: Clean corrupted state if exists
+        continue-on-error: true
+        run: |
+          echo "🧹 Checking for corrupted state..."
+          awslocal s3 ls s3://terraform-state-fiap 2>/dev/null && \
+          awslocal s3 rm s3://terraform-state-fiap --recursive --force || \
+          echo "⚠️ No state files to clean"
 
       - name: Configure LocalStack environment
         run: |
@@ -225,9 +226,9 @@ jobs:
 
       - name: Save LocalStack Cloud Pod
         if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
-        continue-on-error: true
         run: |
           echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
-          localstack pod save ${{ inputs.localstack_pod }} || echo "⚠️ Failed to save Cloud Pod"
+          localstack pod save ${{ inputs.localstack_pod }}
+          echo "✅ Cloud Pod saved successfully"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
