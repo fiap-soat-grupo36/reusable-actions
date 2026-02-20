@@ -1,0 +1,184 @@
+name: _reusable-changes
+
+on:
+  workflow_call:
+    outputs:
+      modules_json:
+        description: "JSON array of modules that need to be built/tested"
+        value: ${{ jobs.detect.outputs.modules_json }}
+      terraform_changed:
+        description: "Whether terraform files changed"
+        value: ${{ jobs.detect.outputs.terraform_changed }}
+      docker_changed:
+        description: "Whether Docker files changed"
+        value: ${{ jobs.detect.outputs.docker_changed }}
+      k8s_changed:
+        description: "Whether Kubernetes manifests changed"
+        value: ${{ jobs.detect.outputs.k8s_changed }}
+      force_all:
+        description: "Whether to force building all modules"
+        value: ${{ jobs.detect.outputs.force_all }}
+
+jobs:
+  detect:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      modules_json: ${{ steps.set-modules.outputs.json }}
+      terraform_changed: ${{ steps.filter.outputs.terraform }}
+      docker_changed: ${{ steps.filter.outputs.docker }}
+      k8s_changed: ${{ steps.filter.outputs.k8s }}
+      force_all: ${{ steps.check-force.outputs.force_all }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            root:
+              - 'pom.xml'
+              - '.github/workflows/**'
+              - 'docker-compose.yml'
+
+            shared-library:
+              - 'shared-library/**'
+
+            terraform:
+              - 'infra/**/*.tf'
+              - 'infra/**/*.tfvars'
+
+            k8s:
+              - 'k8s/**'
+
+            docker:
+              - '**/Dockerfile'
+              - 'docker-compose.yml'
+
+            eureka-server:
+              - 'eureka-server/**'
+
+            auth-service:
+              - 'auth-service/**'
+
+            customer-service:
+              - 'customer-service/**'
+
+            catalog-service:
+              - 'catalog-service/**'
+
+            inventory-service:
+              - 'inventory-service/**'
+
+            budget-service:
+              - 'budget-service/**'
+
+            work-order-service:
+              - 'work-order-service/**'
+
+            notification-service:
+              - 'notification-service/**'
+
+      - name: Check force rebuild conditions
+        id: check-force
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 Checking force rebuild conditions"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Current branch: ${{ github.ref }}"
+          echo "Root files changed: ${{ steps.filter.outputs.root }}"
+          echo "Shared library changed: ${{ steps.filter.outputs.shared-library }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Force all on main/develop branches
+          if [[ "${{ github.ref }}" =~ ^refs/heads/(main|develop)$ ]]; then
+            echo "✓ Force rebuild: main/develop branch detected"
+            echo "force_all=true" >> $GITHUB_OUTPUT
+          # Force all if root files changed (pom.xml, workflows, docker-compose)
+          elif [[ "${{ steps.filter.outputs.root }}" == "true" ]]; then
+            echo "✓ Force rebuild: root files changed"
+            echo "force_all=true" >> $GITHUB_OUTPUT
+          # Force all if shared-library changed (all services depend on it)
+          elif [[ "${{ steps.filter.outputs.shared-library }}" == "true" ]]; then
+            echo "✓ Force rebuild: shared-library changed (all services depend on it)"
+            echo "force_all=true" >> $GITHUB_OUTPUT
+          else
+            echo "✗ No force rebuild: building only changed modules"
+            echo "force_all=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine modules to build
+        id: set-modules
+        uses: actions/github-script@v6
+        env:
+          FILTERS: ${{ toJSON(steps.filter.outputs) }}
+          FORCE_ALL: ${{ steps.check-force.outputs.force_all }}
+        with:
+          script: |
+            const filters = JSON.parse(process.env.FILTERS);
+            const forceAll = process.env.FORCE_ALL === 'true';
+
+            const allModules = [
+              'eureka-server',
+              'shared-library',
+              'auth-service',
+              'customer-service',
+              'catalog-service',
+              'inventory-service',
+              'budget-service',
+              'work-order-service',
+              'notification-service'
+            ];
+
+            let modules = [];
+
+            if (forceAll) {
+              modules = allModules;
+            } else {
+              // Select only modules that changed
+              modules = allModules.filter(moduleName => filters[moduleName] === 'true');
+
+              // If no modules detected, fallback to all modules (safety net)
+              if (modules.length === 0) {
+                console.log('⚠️ No modules detected, falling back to all modules');
+                modules = allModules;
+              }
+            }
+
+            core.setOutput('json', JSON.stringify(modules));
+
+            // Summary logging
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('📊 Change Detection Results');
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`Force all: ${forceAll}`);
+            console.log(`Modules to build (${modules.length}): ${modules.join(', ')}`);
+            console.log(`Terraform changed: ${filters.terraform}`);
+            console.log(`Docker files changed: ${filters.docker}`);
+            console.log(`K8s manifests changed: ${filters.k8s}`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+            // GitHub Step Summary
+            const summary = `## 🔍 Change Detection Summary
+
+            **Force rebuild:** ${forceAll ? '✅ Yes' : '❌ No'}
+            **Branch:** \`${{ github.ref_name }}\`
+            **Modules to build:** ${modules.length} of ${allModules.length}
+
+            ### Selected Modules
+            \`\`\`
+            ${modules.join('\n')}
+            \`\`\`
+
+            ### Other Changes
+            - **Terraform:** ${filters.terraform === 'true' ? '✅ Changed' : '❌ No changes'}
+            - **Docker:** ${filters.docker === 'true' ? '✅ Changed' : '❌ No changes'}
+            - **Kubernetes:** ${filters.k8s === 'true' ? '✅ Changed' : '❌ No changes'}
+            `;
+
+            await core.summary.addRaw(summary).write();

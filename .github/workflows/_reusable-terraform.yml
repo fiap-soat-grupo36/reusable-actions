@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      image_tag:
+        description: 'Legacy input: Docker image tag to trigger deployment updates'
+        required: false
+        type: string
+        default: ''
       terraform_vars:
         description: 'JSON object with custom Terraform variables (e.g. {"image_tag": "v1.0", "instance_type": "t3.micro"})'
         required: false
@@ -44,7 +49,15 @@ on:
         default: 'fiap-microservices'
     secrets:
       LOCALSTACK_AUTH_TOKEN:
-        required: true
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      DATADOG_API_KEY:
+        required: false
+      DATADOG_APP_KEY:
+        required: false
 
 jobs:
   ci-terraform:
@@ -57,7 +70,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Resolve execution mode
+        id: mode
+        run: |
+          if [ -n "${{ secrets.LOCALSTACK_AUTH_TOKEN }}" ]; then
+            echo "use_localstack=true" >> "$GITHUB_OUTPUT"
+            echo "⚙️ Execution mode: LocalStack"
+          else
+            if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+              echo "❌ Missing credentials: provide LOCALSTACK_AUTH_TOKEN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY"
+              exit 1
+            fi
+            echo "use_localstack=false" >> "$GITHUB_OUTPUT"
+            echo "⚙️ Execution mode: AWS"
+          fi
+
       - name: Start LocalStack
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         uses: LocalStack/setup-localstack@v0.2.5
         with:
           image-tag: 'latest'
@@ -68,7 +97,7 @@ jobs:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Load Cloud Pod
-        if: ${{ inputs.localstack_pod != '' }}
+        if: ${{ steps.mode.outputs.use_localstack == 'true' && inputs.localstack_pod != '' }}
         continue-on-error: true
         run: |
           echo "🔄 Attempting to load Cloud Pod: ${{ inputs.localstack_pod }}"
@@ -77,11 +106,13 @@ jobs:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Ensure S3 backend bucket exists
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         run: |
           awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || true
           echo "✅ S3 backend bucket ready"
 
       - name: Clean corrupted state if exists
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         continue-on-error: true
         run: |
           echo "🧹 Checking for corrupted state..."
@@ -90,11 +121,20 @@ jobs:
           echo "⚠️ No state files to clean"
 
       - name: Configure LocalStack environment
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         run: |
           echo "AWS_ACCESS_KEY_ID=test" >> $GITHUB_ENV
           echo "AWS_SECRET_ACCESS_KEY=test" >> $GITHUB_ENV
           echo "AWS_DEFAULT_REGION=${{ inputs.aws_region }}" >> $GITHUB_ENV
           echo "AWS_ENDPOINT_URL=http://localhost:4566" >> $GITHUB_ENV
+
+      - name: Configure AWS environment
+        if: ${{ steps.mode.outputs.use_localstack != 'true' }}
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_DEFAULT_REGION=${{ inputs.aws_region }}" >> $GITHUB_ENV
+          echo "AWS_ENDPOINT_URL=" >> $GITHUB_ENV
 
       - name: Set up Terraform CLI
         uses: hashicorp/setup-terraform@v3.1.2
@@ -123,6 +163,17 @@ jobs:
         id: setup_vars
         run: |
           echo "Setting up Terraform variables..."
+
+          # Backward compatibility with old terraform reusable contract.
+          if [ -n '${{ inputs.image_tag }}' ]; then
+            echo 'TF_VAR_image_tag=${{ inputs.image_tag }}' >> $GITHUB_ENV
+          fi
+          if [ -n '${{ secrets.DATADOG_API_KEY }}' ]; then
+            echo 'TF_VAR_datadog_api_key=${{ secrets.DATADOG_API_KEY }}' >> $GITHUB_ENV
+          fi
+          if [ -n '${{ secrets.DATADOG_APP_KEY }}' ]; then
+            echo 'TF_VAR_datadog_app_key=${{ secrets.DATADOG_APP_KEY }}' >> $GITHUB_ENV
+          fi
           
           # Parse and export regular input variables
           if [ -n '${{ inputs.terraform_vars }}' ] && [ '${{ inputs.terraform_vars }}' != '{}' ]; then
@@ -225,7 +276,7 @@ jobs:
           fi
 
       - name: Save LocalStack Cloud Pod
-        if: ${{ always() && inputs.auto_apply && inputs.localstack_pod != '' }}
+        if: ${{ always() && steps.mode.outputs.use_localstack == 'true' && inputs.auto_apply && inputs.localstack_pod != '' }}
         run: |
           echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
           localstack pod save ${{ inputs.localstack_pod }}

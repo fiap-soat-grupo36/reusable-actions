@@ -1,0 +1,155 @@
+name: _reusable-test
+
+on:
+  workflow_call:
+    inputs:
+      modules_json:
+        description: "JSON array of modules to test"
+        required: true
+        type: string
+      java_version:
+        description: "Java version to use"
+        required: false
+        type: string
+        default: '21'
+      maven_args:
+        description: "Additional Maven arguments"
+        required: false
+        type: string
+        default: ''
+      cache_key:
+        description: "Cache key from build job (if not provided, will be calculated)"
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  test:
+    name: Test ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(inputs.modules_json) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ inputs.java_version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+
+      - name: Calculate cache key
+        id: cache-key
+        run: |
+          if [ -n "${{ inputs.cache_key }}" ]; then
+            CACHE_KEY="${{ inputs.cache_key }}"
+          else
+            POM_HASH=$(find . -name 'pom.xml' -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-8)
+            SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-8)
+            CACHE_KEY="build-cache-${SHA_SHORT}-${POM_HASH}"
+          fi
+
+          echo "key=${CACHE_KEY}" >> $GITHUB_OUTPUT
+          echo "Cache key: ${CACHE_KEY}"
+
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/target
+            ~/.m2/repository
+          key: ${{ steps.cache-key.outputs.key }}
+          fail-on-cache-miss: true
+
+      - name: Test ${{ matrix.module }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🧪 Testing module: ${{ matrix.module }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Cache restored: ✅"
+          echo "Java version: ${{ inputs.java_version }}"
+          echo "Maven args: ${{ inputs.maven_args }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          START_TIME=$(date +%s)
+
+          # Run tests WITHOUT rebuilding (dependencies already cached)
+          mvn --batch-mode -pl ${{ matrix.module }} test ${{ inputs.maven_args }}
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "TEST_DURATION=${DURATION}" >> $GITHUB_ENV
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Tests completed in ${DURATION}s"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Upload JaCoCo coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports-${{ matrix.module }}
+          path: "**/target/site/jacoco/**"
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.module }}
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Test summary
+        if: always()
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🧪 Test Results: ${{ matrix.module }}
+
+          **Status:** ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}
+          **Duration:** ${TEST_DURATION}s
+          **Module:** \`${{ matrix.module }}\`
+          **Cache:** Restored from build job (no rebuild needed)
+
+          EOF
+
+      - name: Comment on PR if tests failed
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `## ❌ Tests failed: \`${{ matrix.module }}\`
+
+            The test suite for **${{ matrix.module }}** has failed.
+
+            **Details:**
+            - Duration: ${process.env.TEST_DURATION}s
+            - [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - Test reports and logs have been uploaded as artifacts
+
+            Please review the failures and fix the issues before merging.`;
+
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Failed to create comment:', error);
+            }

@@ -1,0 +1,132 @@
+name: _reusable-build-cache
+
+on:
+  workflow_call:
+    inputs:
+      modules_json:
+        description: "JSON array of modules to build"
+        required: true
+        type: string
+      java_version:
+        description: "Java version to use"
+        required: false
+        type: string
+        default: '21'
+      maven_args:
+        description: "Additional Maven arguments"
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build and cache artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ inputs.java_version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Parse modules to build
+        id: modules
+        run: |
+          MODULES_JSON='${{ inputs.modules_json }}'
+          MODULES_CSV=$(echo "$MODULES_JSON" | python3 -c "import sys, json; print(','.join(json.load(sys.stdin)))")
+          echo "csv=${MODULES_CSV}" >> $GITHUB_OUTPUT
+          echo "count=$(echo "$MODULES_JSON" | python3 -c "import sys, json; print(len(json.load(sys.stdin)))")" >> $GITHUB_OUTPUT
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔨 Build Configuration"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Java version: ${{ inputs.java_version }}"
+          echo "Modules count: $(echo "$MODULES_JSON" | python3 -c "import sys, json; print(len(json.load(sys.stdin)))")"
+          echo "Modules list: ${MODULES_CSV}"
+          echo "Maven args: ${{ inputs.maven_args }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Build modules (skip tests)
+        run: |
+          echo "🔨 Building modules..."
+          START_TIME=$(date +%s)
+
+          if [ -n "${{ steps.modules.outputs.csv }}" ]; then
+            echo "Building specific modules: ${{ steps.modules.outputs.csv }}"
+            mvn --batch-mode clean install \
+              -DskipTests \
+              -pl "${{ steps.modules.outputs.csv }}" \
+              -am \
+              ${{ inputs.maven_args }}
+          else
+            echo "Building all modules"
+            mvn --batch-mode clean install \
+              -DskipTests \
+              ${{ inputs.maven_args }}
+          fi
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "BUILD_DURATION=${DURATION}" >> $GITHUB_ENV
+          echo "✅ Build completed in ${DURATION}s"
+
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          POM_HASH=$(find . -name 'pom.xml' -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-8)
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-8)
+          CACHE_KEY="build-cache-${SHA_SHORT}-${POM_HASH}"
+
+          echo "key=${CACHE_KEY}" >> $GITHUB_OUTPUT
+          echo "pom_hash=${POM_HASH}" >> $GITHUB_OUTPUT
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "💾 Cache Configuration"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Cache key: ${CACHE_KEY}"
+          echo "POM hash: ${POM_HASH}"
+          echo "SHA short: ${SHA_SHORT}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Cache build artifacts
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            **/target
+            ~/.m2/repository
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Build summary
+        if: always()
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🔨 Build Summary
+
+          **Status:** ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
+          **Duration:** ${BUILD_DURATION}s
+          **Modules built:** ${{ steps.modules.outputs.count }}
+          **Cache key:** \`${{ steps.cache-key.outputs.key }}\`
+          **Commit:** \`${{ steps.cache-key.outputs.sha_short }}\`
+
+          ### Modules
+          \`\`\`
+          ${{ steps.modules.outputs.csv }}
+          \`\`\`
+
+          ### Next Steps
+          Test jobs will restore this cache and run tests without rebuilding dependencies.
+          This saves approximately **2-3 minutes per test job**.
+
+          EOF
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Build artifacts cached successfully"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

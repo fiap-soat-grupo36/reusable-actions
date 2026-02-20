@@ -1,0 +1,134 @@
+name: _reusable-build
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: '21'
+      coverage_min_pr:
+        required: false
+        type: string
+        default: '0.50'
+      coverage_min_main:
+        required: false
+        type: string
+        default: '0.70'
+      maven_args:
+        required: false
+        type: string
+        default: ''
+      modules_json:
+        required: false
+        type: string
+        default: '["eureka-server","shared-library","customer-service","catalog-service","inventory-service","budget-service","auth-service","work-order-service","notification-service"]'
+      skip_coverage_checks:
+        required: false
+        type: boolean
+        default: false
+    secrets: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Resolve modules list
+        env:
+          MODULES_JSON: ${{ inputs.modules_json }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          modules_raw = os.environ.get("MODULES_JSON", "[]")
+          modules = json.loads(modules_raw) if modules_raw else []
+          modules_csv = ",".join(modules)
+
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+            env_file.write(f"MODULES_CSV={modules_csv}\n")
+          PY
+
+      - name: Build (no tests)
+        run: |
+          if [ -n "$MODULES_CSV" ]; then
+            mvn --batch-mode clean install -DskipTests -pl "$MODULES_CSV" -am ${{ inputs.maven_args }}
+          else
+            mvn --batch-mode clean install -DskipTests ${{ inputs.maven_args }}
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(inputs.modules_json) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build dependencies (${{ matrix.module }})
+        run: mvn --batch-mode -pl ${{ matrix.module }} -am -DskipTests install ${{ inputs.maven_args }}
+
+      - name: Unit tests (${{ matrix.module }})
+        run: mvn --batch-mode -pl ${{ matrix.module }} test ${{ inputs.maven_args }}
+
+      - name: Upload JaCoCo reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports-${{ matrix.module }}
+          path: "**/target/site/jacoco/**"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ !inputs.skip_coverage_checks && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && github.event_name == 'push')) }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Coverage check (PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: mvn --batch-mode verify -Pverify-coverage -Dcoverage.minimum=${{ inputs.coverage_min_pr }} ${{ inputs.maven_args }}
+
+      - name: Coverage check (main)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        run: mvn --batch-mode verify -Pverify-coverage -Dcoverage.minimum=${{ inputs.coverage_min_main }} ${{ inputs.maven_args }}

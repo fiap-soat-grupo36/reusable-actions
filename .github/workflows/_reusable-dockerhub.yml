@@ -1,30 +1,68 @@
 name: _reusable-dockerhub
+
 on:
   workflow_call:
     inputs:
-      modules:
-        description: "JSON array of module names to build (e.g., ['api', 'worker'])"
-        required: true
+      services_json:
+        description: "Legacy format: JSON array with service and dockerfile path"
+        required: false
         type: string
+        default: '[]'
+      modules_json:
+        description: "Legacy format: JSON array of module names"
+        required: false
+        type: string
+        default: '[]'
+      branch_tag:
+        description: "Legacy tag used as main Docker tag"
+        required: false
+        type: string
+        default: ''
+      ref_name_for_sha:
+        description: "Legacy prefix for SHA tag"
+        required: false
+        type: string
+        default: ''
+      sha_short:
+        description: "Legacy precomputed SHA (optional)"
+        required: false
+        type: string
+        default: ''
+      build_tags_suffix:
+        description: "Legacy SHA fallback"
+        required: false
+        type: string
+        default: ''
+      modules:
+        description: "Current format: JSON array of module names"
+        required: false
+        type: string
+        default: '[]'
       dockerfile_pattern:
-        description: "Pattern for Dockerfile path. Use {module} as placeholder (e.g., './{module}/Dockerfile')"
+        description: "Current format: Dockerfile path pattern with {module}"
         required: false
         type: string
         default: './{module}/Dockerfile'
       registry_namespace:
         description: "Docker registry namespace/username"
-        required: true
+        required: false
         type: string
+        default: ''
       tag_strategy:
-        description: "Tagging strategy: 'branch', 'sha', 'both', 'custom'"
+        description: "Current format: branch, sha, both, custom"
         required: false
         type: string
         default: 'both'
       custom_tags:
-        description: "Custom tags as JSON array (e.g., ['latest', 'v1.0']). Used when tag_strategy='custom'"
+        description: "Current format: JSON array of tags when tag_strategy=custom"
         required: false
         type: string
         default: '[]'
+      exclude_modules:
+        description: "Current format: JSON array of modules to skip"
+        required: false
+        type: string
+        default: '["shared-library"]'
       push_images:
         required: false
         type: boolean
@@ -33,97 +71,135 @@ on:
         required: false
         type: number
         default: 4
-      exclude_modules:
-        description: "JSON array of modules to exclude (e.g., ['shared-library'])"
-        required: false
-        type: string
-        default: '["shared-library"]'
     secrets:
       DOCKERHUB_USERNAME:
-        required: true
+        required: false
       DOCKERHUB_TOKEN:
-        required: true
+        required: false
 
 jobs:
+  prepare:
+    name: Prepare services list and tags mode
+    runs-on: ubuntu-latest
+    outputs:
+      services_json: ${{ steps.prepare.outputs.services_json }}
+      registry_namespace: ${{ steps.prepare.outputs.registry_namespace }}
+      legacy_mode: ${{ steps.prepare.outputs.legacy_mode }}
+      branch_tag: ${{ steps.prepare.outputs.branch_tag }}
+      ref_name_for_sha: ${{ steps.prepare.outputs.ref_name_for_sha }}
+      sha_short: ${{ steps.prepare.outputs.sha_short }}
+    steps:
+      - name: Resolve Docker build inputs
+        id: prepare
+        run: |
+          set -euo pipefail
+
+          SERVICES_JSON='${{ inputs.services_json }}'
+          MODULES_JSON='${{ inputs.modules_json }}'
+          MODULES='${{ inputs.modules }}'
+          DOCKERFILE_PATTERN='${{ inputs.dockerfile_pattern }}'
+          EXCLUDE_MODULES='${{ inputs.exclude_modules }}'
+
+          if [ -z "${SERVICES_JSON}" ] || [ "${SERVICES_JSON}" = "null" ]; then SERVICES_JSON='[]'; fi
+          if [ -z "${MODULES_JSON}" ] || [ "${MODULES_JSON}" = "null" ]; then MODULES_JSON='[]'; fi
+          if [ -z "${MODULES}" ] || [ "${MODULES}" = "null" ]; then MODULES='[]'; fi
+          if [ -z "${EXCLUDE_MODULES}" ] || [ "${EXCLUDE_MODULES}" = "null" ]; then EXCLUDE_MODULES='["shared-library"]'; fi
+
+          if ! echo "${EXCLUDE_MODULES}" | jq empty >/dev/null 2>&1; then
+            EXCLUDE_MODULES='["shared-library"]'
+          fi
+
+          RESOLVED_SERVICES='[]'
+          LEGACY_MODE='false'
+
+          if [ "${SERVICES_JSON}" != "[]" ]; then
+            LEGACY_MODE='true'
+            RESOLVED_SERVICES="${SERVICES_JSON}"
+          elif [ "${MODULES_JSON}" != "[]" ]; then
+            LEGACY_MODE='true'
+            RESOLVED_SERVICES=$(echo "${MODULES_JSON}" | jq -c '
+              map(
+                select(. != "shared-library") |
+                {
+                  service: .,
+                  dockerfile: ("./\(.)/Dockerfile")
+                }
+              )
+            ')
+          elif [ "${MODULES}" != "[]" ]; then
+            RESOLVED_SERVICES=$(echo "${MODULES}" | jq -c \
+              --arg pattern "${DOCKERFILE_PATTERN}" \
+              --argjson excluded "${EXCLUDE_MODULES}" '
+              map(
+                select((. as $m | ($excluded | index($m)) | not)) |
+                {
+                  service: .,
+                  dockerfile: ($pattern | gsub("\\{module\\}"; .))
+                }
+              )
+            ')
+          fi
+
+          if ! echo "${RESOLVED_SERVICES}" | jq empty >/dev/null 2>&1; then
+            echo "❌ Invalid services JSON after resolution: ${RESOLVED_SERVICES}"
+            exit 1
+          fi
+
+          BRANCH_TAG='${{ inputs.branch_tag }}'
+          REF_PREFIX='${{ inputs.ref_name_for_sha }}'
+          SHA_INPUT='${{ inputs.sha_short }}'
+
+          if [ -z "${BRANCH_TAG}" ]; then BRANCH_TAG='${{ github.ref_name }}'; fi
+          if [ -z "${REF_PREFIX}" ]; then REF_PREFIX='${{ github.ref_name }}'; fi
+          if [ -z "${SHA_INPUT}" ]; then SHA_INPUT='${{ inputs.build_tags_suffix }}'; fi
+          if [ -z "${SHA_INPUT}" ]; then SHA_INPUT="${GITHUB_SHA}"; fi
+          SHA_INPUT="${SHA_INPUT:0:7}"
+
+          if [ -n '${{ inputs.branch_tag }}' ] || [ -n '${{ inputs.ref_name_for_sha }}' ] || [ '${{ inputs.modules_json }}' != '[]' ] || [ '${{ inputs.services_json }}' != '[]' ]; then
+            LEGACY_MODE='true'
+          fi
+
+          REGISTRY_NAMESPACE='${{ inputs.registry_namespace }}'
+          if [ -z "${REGISTRY_NAMESPACE}" ]; then REGISTRY_NAMESPACE='${{ secrets.DOCKERHUB_USERNAME }}'; fi
+          if [ -z "${REGISTRY_NAMESPACE}" ]; then REGISTRY_NAMESPACE='grecomilani'; fi
+
+          echo "services_json=${RESOLVED_SERVICES}" >> "${GITHUB_OUTPUT}"
+          echo "registry_namespace=${REGISTRY_NAMESPACE}" >> "${GITHUB_OUTPUT}"
+          echo "legacy_mode=${LEGACY_MODE}" >> "${GITHUB_OUTPUT}"
+          echo "branch_tag=${BRANCH_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "ref_name_for_sha=${REF_PREFIX}" >> "${GITHUB_OUTPUT}"
+          echo "sha_short=${SHA_INPUT}" >> "${GITHUB_OUTPUT}"
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🐳 Docker Preparation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Legacy mode: ${LEGACY_MODE}"
+          echo "Registry namespace: ${REGISTRY_NAMESPACE}"
+          echo "Resolved services: ${RESOLVED_SERVICES}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
   build:
-    name: Build ${{ matrix.module }}
+    name: Build ${{ matrix.service }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.services_json != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: ${{ inputs.max_parallel }}
       matrix:
-        module: ${{ fromJSON(inputs.modules) }}
-        exclude:
-          - module: ${{ fromJSON(inputs.exclude_modules)[0] }}
-          - module: ${{ fromJSON(inputs.exclude_modules)[1] }}
-          - module: ${{ fromJSON(inputs.exclude_modules)[2] }}
-          - module: ${{ fromJSON(inputs.exclude_modules)[3] }}
-          - module: ${{ fromJSON(inputs.exclude_modules)[4] }}
+        include: ${{ fromJSON(needs.prepare.outputs.services_json) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate Dockerfile path
-        id: dockerfile
+      - name: Validate Docker credentials for push
+        if: ${{ inputs.push_images }}
         run: |
-          DOCKERFILE_PATH="${{ inputs.dockerfile_pattern }}"
-          DOCKERFILE_PATH="${DOCKERFILE_PATH//\{module\}/${{ matrix.module }}}"
-          echo "path=${DOCKERFILE_PATH}" >> "$GITHUB_OUTPUT"
-          echo "📄 Dockerfile: ${DOCKERFILE_PATH}"
-
-      - name: Generate tags
-        id: tags
-        run: |
-          NAMESPACE="${{ inputs.registry_namespace }}"
-          MODULE="${{ matrix.module }}"
-          STRATEGY="${{ inputs.tag_strategy }}"
-          BRANCH="${{ github.ref_name }}"
-          SHA_SHORT="${GITHUB_SHA:0:7}"
-          
-          TAGS=""
-          
-          case "$STRATEGY" in
-            branch)
-              TAGS="${NAMESPACE}/${MODULE}:${BRANCH}"
-              ;;
-            sha)
-              TAGS="${NAMESPACE}/${MODULE}:${SHA_SHORT}"
-              ;;
-            both)
-              TAGS="${NAMESPACE}/${MODULE}:${BRANCH}"
-              TAGS="${TAGS}
-          ${NAMESPACE}/${MODULE}:${BRANCH}-${SHA_SHORT}"
-              ;;
-            custom)
-              CUSTOM_TAGS='${{ inputs.custom_tags }}'
-              if [ "$CUSTOM_TAGS" = "[]" ] || [ -z "$CUSTOM_TAGS" ]; then
-                echo "❌ tag_strategy=custom but no custom_tags provided"
-                exit 1
-              fi
-              TAGS=$(echo "$CUSTOM_TAGS" | jq -r '.[]' | while read tag; do
-                echo "${NAMESPACE}/${MODULE}:${tag}"
-              done | paste -sd $'\n' -)
-              ;;
-            *)
-              echo "❌ Invalid tag_strategy: $STRATEGY"
-              exit 1
-              ;;
-          esac
-          
-          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$TAGS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🐳 Docker Build Configuration"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Module: ${MODULE}"
-          echo "Strategy: ${STRATEGY}"
-          echo "Push: ${{ inputs.push_images }}"
-          echo "Tags:"
-          echo "$TAGS"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ -z '${{ secrets.DOCKERHUB_USERNAME }}' ] || [ -z '${{ secrets.DOCKERHUB_TOKEN }}' ]; then
+            echo "❌ push_images=true, but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN are missing."
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -135,32 +211,91 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Generate tags
+        id: tags
+        run: |
+          set -euo pipefail
+
+          NAMESPACE='${{ needs.prepare.outputs.registry_namespace }}'
+          SERVICE='${{ matrix.service }}'
+          LEGACY_MODE='${{ needs.prepare.outputs.legacy_mode }}'
+          SHA_SHORT='${{ needs.prepare.outputs.sha_short }}'
+
+          TAGS=""
+          if [ "${LEGACY_MODE}" = "true" ]; then
+            BRANCH_TAG='${{ needs.prepare.outputs.branch_tag }}'
+            REF_PREFIX='${{ needs.prepare.outputs.ref_name_for_sha }}'
+            TAGS=$(printf '%s\n%s' \
+              "${NAMESPACE}/${SERVICE}:${BRANCH_TAG}" \
+              "${NAMESPACE}/${SERVICE}:${REF_PREFIX}-${SHA_SHORT}")
+          else
+            STRATEGY='${{ inputs.tag_strategy }}'
+            BRANCH='${{ github.ref_name }}'
+
+            case "${STRATEGY}" in
+              branch)
+                TAGS="${NAMESPACE}/${SERVICE}:${BRANCH}"
+                ;;
+              sha)
+                TAGS="${NAMESPACE}/${SERVICE}:${SHA_SHORT}"
+                ;;
+              both)
+                TAGS=$(printf '%s\n%s' \
+                  "${NAMESPACE}/${SERVICE}:${BRANCH}" \
+                  "${NAMESPACE}/${SERVICE}:${BRANCH}-${SHA_SHORT}")
+                ;;
+              custom)
+                CUSTOM_TAGS='${{ inputs.custom_tags }}'
+                if [ "${CUSTOM_TAGS}" = "[]" ] || [ -z "${CUSTOM_TAGS}" ]; then
+                  echo "❌ tag_strategy=custom but custom_tags is empty."
+                  exit 1
+                fi
+                TAGS=$(echo "${CUSTOM_TAGS}" | jq -r --arg ns "${NAMESPACE}" --arg svc "${SERVICE}" '.[] | "\($ns)/\($svc):\(.)"' | paste -sd $'\n' -)
+                ;;
+              *)
+                echo "❌ Invalid tag_strategy: ${STRATEGY}"
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "tags<<EOF" >> "${GITHUB_OUTPUT}"
+          echo "${TAGS}" >> "${GITHUB_OUTPUT}"
+          echo "EOF" >> "${GITHUB_OUTPUT}"
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🐳 Docker Build Configuration"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Service: ${SERVICE}"
+          echo "Dockerfile: ${{ matrix.dockerfile }}"
+          echo "Legacy mode: ${LEGACY_MODE}"
+          echo "Push: ${{ inputs.push_images }}"
+          echo "Tags:"
+          echo "${TAGS}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ steps.dockerfile.outputs.path }}
+          file: ${{ matrix.dockerfile }}
           push: ${{ inputs.push_images }}
           tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha,scope=${{ matrix.module }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.module }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
       - name: Build Summary
         if: always()
         run: |
-          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ## 🐳 Docker Build: ${{ matrix.module }}
+          cat << 'EOF' >> "${GITHUB_STEP_SUMMARY}"
+          ## 🐳 Docker Build: ${{ matrix.service }}
 
           **Status:** ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
           **Pushed:** ${{ inputs.push_images && '✅ Yes' || '❌ No (build only)' }}
+          **Dockerfile:** `${{ matrix.dockerfile }}`
 
           ### Tags
-          \`\`\`
+          ```
           ${{ steps.tags.outputs.tags }}
-          \`\`\`
-
-          ### Configuration
-          - **Branch:** ${{ github.ref_name }}
-          - **Commit:** ${GITHUB_SHA:0:7}
-          - **Dockerfile:** ${{ steps.dockerfile.outputs.path }}
+          ```
           EOF

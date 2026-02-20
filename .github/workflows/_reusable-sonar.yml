@@ -1,0 +1,79 @@
+name: _reusable-sonar
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        required: false
+        type: string
+        default: '21'
+      sonar_host:
+        required: false
+        type: string
+        default: 'https://sonarcloud.io'
+      sonar_org:
+        required: true
+        type: string
+      sonar_project_key:
+        required: true
+        type: string
+      scanner_version:
+        required: false
+        type: string
+        default: '4.0.0.4121'
+      maven_args:
+        required: false
+        type: string
+        default: ''
+    secrets:
+      SONAR_TOKEN:
+        required: false
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: temurin
+          cache: maven
+
+      - name: Download JaCoCo reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-reports-*
+          merge-multiple: true
+
+      - name: Resolve JaCoCo XML paths
+        id: jacoco
+        run: |
+          mapfile -t files < <(find . -path "*/target/site/jacoco/jacoco.xml" -print)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "paths=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          joined=$(printf "%s," "${files[@]}")
+          joined=${joined%,}
+          echo "paths=$joined" >> "$GITHUB_OUTPUT"
+
+      - name: Run SonarCloud Scan (skip tests)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          JACOCO_XML_PATHS: ${{ steps.jacoco.outputs.paths }}
+        run: |
+          EXTRA_ARGS=""
+          if [ -n "$JACOCO_XML_PATHS" ]; then
+            EXTRA_ARGS="-Dsonar.coverage.jacoco.xmlReportPaths=$JACOCO_XML_PATHS"
+          fi
+          mvn --batch-mode -DskipTests verify org.sonarsource.scanner.maven:sonar-maven-plugin:${{ inputs.scanner_version }}:sonar \
+            -Dsonar.host.url="${{ inputs.sonar_host }}" \
+            -Dsonar.organization="${{ inputs.sonar_org }}" \
+            -Dsonar.projectKey="${{ inputs.sonar_project_key }}" \
+            $EXTRA_ARGS \
+            ${{ inputs.maven_args }}
