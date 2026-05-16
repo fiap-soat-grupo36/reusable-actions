@@ -83,7 +83,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       services_json: ${{ steps.prepare.outputs.services_json }}
-      registry_namespace: ${{ steps.prepare.outputs.registry_namespace }}
       legacy_mode: ${{ steps.prepare.outputs.legacy_mode }}
       branch_tag: ${{ steps.prepare.outputs.branch_tag }}
       ref_name_for_sha: ${{ steps.prepare.outputs.ref_name_for_sha }}
@@ -164,7 +163,6 @@ jobs:
           if [ -z "${REGISTRY_NAMESPACE}" ]; then REGISTRY_NAMESPACE='grecomilani'; fi
 
           echo "services_json=${RESOLVED_SERVICES}" >> "${GITHUB_OUTPUT}"
-          echo "registry_namespace=${REGISTRY_NAMESPACE}" >> "${GITHUB_OUTPUT}"
           echo "legacy_mode=${LEGACY_MODE}" >> "${GITHUB_OUTPUT}"
           echo "branch_tag=${BRANCH_TAG}" >> "${GITHUB_OUTPUT}"
           echo "ref_name_for_sha=${REF_PREFIX}" >> "${GITHUB_OUTPUT}"
@@ -217,7 +215,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          NAMESPACE='${{ needs.prepare.outputs.registry_namespace }}'
+          NAMESPACE='${{ inputs.registry_namespace }}'
+          if [ -z "${NAMESPACE}" ]; then NAMESPACE='${{ secrets.DOCKERHUB_USERNAME }}'; fi
+          if [ -z "${NAMESPACE}" ]; then NAMESPACE='grecomilani'; fi
           SERVICE='${{ matrix.service }}'
           LEGACY_MODE='${{ needs.prepare.outputs.legacy_mode }}'
           SHA_SHORT='${{ needs.prepare.outputs.sha_short }}'
