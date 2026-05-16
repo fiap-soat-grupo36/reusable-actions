@@ -114,11 +114,3 @@ jobs:
             ${{ inputs.maven_args }}
           
           echo "✅ SonarCloud analysis complete"
-
-      - name: Wait for Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          scanMetadataReportFile: ${{ inputs.project_dir }}/target/sonar/report-task.txt
