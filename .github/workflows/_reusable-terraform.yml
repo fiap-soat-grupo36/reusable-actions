@@ -90,20 +90,15 @@ jobs:
             echo "⚙️ Execution mode: AWS"
           fi
 
-      - name: Start LocalStack
-        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
-        uses: LocalStack/setup-localstack@v0.2.5
-        with:
-          image-tag: 'latest'
-          install-awslocal: 'false'
-          configuration: LOCALSTACK_PERSISTENCE=1
-          use-pro: 'true'
-        env:
-          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
-
       - name: Install LocalStack lstk CLI
         if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         run: npm install --global @localstack/lstk
+
+      - name: Start LocalStack
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
+        run: lstk start --non-interactive
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Load Cloud Pod
         if: ${{ steps.mode.outputs.use_localstack == 'true' && inputs.localstack_pod != '' }}
