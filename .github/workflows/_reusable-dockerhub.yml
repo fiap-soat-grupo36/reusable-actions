@@ -130,10 +130,11 @@ jobs:
               --arg pattern "${DOCKERFILE_PATTERN}" \
               --argjson excluded "${EXCLUDE_MODULES}" '
               map(
-                select((. as $m | ($excluded | index($m)) | not)) |
+                . as $module |
+                select(($excluded | index($module)) | not) |
                 {
-                  service: .,
-                  dockerfile: ($pattern | gsub("\\{module\\}"; .))
+                  service: $module,
+                  dockerfile: ($pattern | gsub("\\{module\\}"; $module))
                 }
               )
             ')
