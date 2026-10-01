@@ -18,6 +18,7 @@
 | `workspace` | ✅ | - | Nome do workspace Terraform |
 | `environment` | ✅ | - | Ambiente (dev/staging/prod) |
 | `working_directory` | ❌ | `./infra/` | Diretório do código Terraform |
+| `backend_bucket` | ❌ | `terraform-state-fiap` | Bucket S3 para o estado do Terraform |
 | `aws_region` | ❌ | `us-east-1` | Região AWS |
 | `tfvars_file` | ❌ | `''` | Arquivo .tfvars (opcional) |
 | `auto_apply` | ❌ | `false` | Auto-aplicar mudanças |

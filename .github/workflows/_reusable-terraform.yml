@@ -15,6 +15,11 @@ on:
         required: false
         type: string
         default: './infra/'
+      backend_bucket:
+        description: 'S3 bucket used to store the Terraform state'
+        required: false
+        type: string
+        default: 'terraform-state-fiap'
       aws_region:
         required: false
         type: string
@@ -107,17 +112,21 @@ jobs:
 
       - name: Ensure S3 backend bucket exists
         if: ${{ steps.mode.outputs.use_localstack == 'true' }}
+        env:
+          BACKEND_BUCKET: ${{ inputs.backend_bucket }}
         run: |
-          awslocal s3 mb s3://terraform-state-fiap 2>/dev/null || true
-          echo "✅ S3 backend bucket ready"
+          awslocal s3 mb "s3://${BACKEND_BUCKET}" 2>/dev/null || true
+          echo "✅ S3 backend bucket ready: ${BACKEND_BUCKET}"
 
       - name: Clean corrupted state if exists
         if: ${{ steps.mode.outputs.use_localstack == 'true' }}
         continue-on-error: true
+        env:
+          BACKEND_BUCKET: ${{ inputs.backend_bucket }}
         run: |
           echo "🧹 Checking for corrupted state..."
-          awslocal s3 ls s3://terraform-state-fiap 2>/dev/null && \
-          awslocal s3 rm s3://terraform-state-fiap --recursive --force || \
+          awslocal s3 ls "s3://${BACKEND_BUCKET}" 2>/dev/null && \
+          awslocal s3 rm "s3://${BACKEND_BUCKET}" --recursive --force || \
           echo "⚠️ No state files to clean"
 
       - name: Configure LocalStack environment
