@@ -26,6 +26,14 @@
 
 Nenhum necessário (usa `GITHUB_TOKEN` automático)
 
+### Permissões necessárias
+
+No repositório consumidor, habilite em `Settings > Actions > General` a opção
+`Allow GitHub Actions to create and approve pull requests`. O workflow também
+precisa declarar `pull-requests: write` e `contents: write`; sem essa opção do
+GitHub, o `GITHUB_TOKEN` não pode criar PRs mesmo quando o YAML possui as
+permissões corretas.
+
 ---
 
 ## 📚 Exemplos
