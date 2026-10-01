@@ -101,12 +101,16 @@ jobs:
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
+      - name: Install LocalStack lstk CLI
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
+        run: npm install --global @localstack/lstk
+
       - name: Load Cloud Pod
         if: ${{ steps.mode.outputs.use_localstack == 'true' && inputs.localstack_pod != '' }}
         continue-on-error: true
         run: |
           echo "🔄 Attempting to load Cloud Pod: ${{ inputs.localstack_pod }}"
-          localstack pod load ${{ inputs.localstack_pod }} || echo "⚠️ Cloud Pod not found, starting fresh"
+          lstk snapshot load "pod:${{ inputs.localstack_pod }}" || echo "⚠️ Cloud Pod not found, starting fresh"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
@@ -128,6 +132,13 @@ jobs:
           awslocal s3 ls "s3://${BACKEND_BUCKET}" 2>/dev/null && \
           awslocal s3 rm "s3://${BACKEND_BUCKET}" --recursive --force || \
           echo "⚠️ No state files to clean"
+
+      - name: Verify LocalStack infrastructure status
+        if: ${{ steps.mode.outputs.use_localstack == 'true' }}
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 2 \
+            http://localhost:4566/_localstack/health
+          awslocal s3 ls
 
       - name: Configure LocalStack environment
         if: ${{ steps.mode.outputs.use_localstack == 'true' }}
@@ -288,7 +299,7 @@ jobs:
         if: ${{ always() && steps.mode.outputs.use_localstack == 'true' && inputs.auto_apply && inputs.localstack_pod != '' }}
         run: |
           echo "💾 Saving Cloud Pod: ${{ inputs.localstack_pod }}"
-          localstack pod save ${{ inputs.localstack_pod }}
+          lstk snapshot save "pod:${{ inputs.localstack_pod }}"
           echo "✅ Cloud Pod saved successfully"
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
